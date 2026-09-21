@@ -1,0 +1,6 @@
+from typing import Protocol
+from .contracts import SafetyPage, SafetySnapshot
+
+class SafetyRepository(Protocol):
+    def get(self, identifier: str, actor_id: int) -> SafetySnapshot | None: ...
+    def list_for_user(self, actor_id: int, cursor: str | None = None, limit: int = 50) -> SafetyPage: ...

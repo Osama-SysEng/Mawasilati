@@ -1,0 +1,6 @@
+from typing import Protocol
+from .contracts import PaymentPage, PaymentSnapshot
+
+class PaymentRepository(Protocol):
+    def get(self, identifier: str, actor_id: int) -> PaymentSnapshot | None: ...
+    def list_for_user(self, actor_id: int, cursor: str | None = None, limit: int = 50) -> PaymentPage: ...

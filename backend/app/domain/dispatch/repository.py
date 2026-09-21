@@ -1,0 +1,6 @@
+from typing import Protocol
+from .contracts import DispatchPage, DispatchSnapshot
+
+class DispatchRepository(Protocol):
+    def get(self, identifier: str, actor_id: int) -> DispatchSnapshot | None: ...
+    def list_for_user(self, actor_id: int, cursor: str | None = None, limit: int = 50) -> DispatchPage: ...
