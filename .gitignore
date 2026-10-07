@@ -20,3 +20,13 @@ frontend/pubspec.lock
 node_modules/
 coverage/
 *.log
+
+# added by light repair
+.next/
+out/
+dist/
+build/
+*.sqlite3
+*.db
+htmlcov/
+.coverage

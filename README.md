@@ -97,3 +97,8 @@ credentials for the underlying third-party services:
   Firebase Cloud Messaging wiring exists yet.
 - Maps — no `google_maps_flutter` widget yet; add your `GOOGLE_MAPS_API_KEY`
   and the native Android/iOS setup before wiring the map screens.
+
+## What's New (Oct 2026)
+- Live PostgreSQL via Alembic (10 tables) + `.env.example` + `SECURITY.md`
+- 17 tests collected, 0 errors
+- Interactive 3D showcase: open `web-3d/index.html` (Three.js, animated, mouse-reactive)
