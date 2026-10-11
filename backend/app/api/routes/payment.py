@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -37,5 +37,5 @@ def confirm(
 
 
 @router.get('/history')
-def history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    return payment_history(db, current_user.id)
+def history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db), limit: int = Query(default=50, ge=1, le=500), offset: int = Query(default=0, ge=0)) -> dict:
+    return payment_history(db, current_user.id, limit=limit, offset=offset)

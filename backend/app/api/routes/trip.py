@@ -38,5 +38,5 @@ def track(trip_id: str, current_user: User = Depends(get_current_user), db: Sess
 
 
 @router.get('/history')
-def history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    return trip_history(db, current_user.id)
+def history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db), limit: int = Query(default=50, ge=1, le=500), offset: int = Query(default=0, ge=0)) -> dict:
+    return trip_history(db, current_user.id, limit=limit, offset=offset)

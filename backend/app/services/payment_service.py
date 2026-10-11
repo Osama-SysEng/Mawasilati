@@ -40,6 +40,10 @@ def confirm_payment(db: Session, user_id: str, payment_id: str) -> dict:
     return {'payment_id': payment.id, 'status': payment.status, 'qr_ticket': payment.gateway_reference, 'trip_id': payment.trip_id, 'idempotent_replay': False}
 
 
-def payment_history(db: Session, user_id: str) -> dict:
-    payments = db.query(Payment).filter(Payment.user_id == user_id).order_by(Payment.created_at.desc()).all()
-    return {'user_id': user_id, 'items': [{'payment_id': payment.id, 'trip_id': payment.trip_id, 'method': payment.method, 'amount': float(payment.amount), 'status': payment.status, 'created_at': payment.created_at.isoformat() if payment.created_at else None} for payment in payments]}
+def payment_history(db: Session, user_id: str, limit: int = 50, offset: int = 0) -> dict:
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    query = db.query(Payment).filter(Payment.user_id == user_id).order_by(Payment.created_at.desc())
+    total = query.count()
+    payments = query.offset(offset).limit(limit).all()
+    return {'user_id': user_id, 'items': [{'payment_id': payment.id, 'trip_id': payment.trip_id, 'method': payment.method, 'amount': float(payment.amount), 'status': payment.status, 'created_at': payment.created_at.isoformat() if payment.created_at else None} for payment in payments], 'total': total, 'limit': limit, 'offset': offset}

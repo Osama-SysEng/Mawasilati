@@ -86,6 +86,10 @@ def track_trip(db: Session, user_id: str, trip_id: str) -> dict:
     return {'trip_id': trip.id, 'found': True, 'status': trip.status, 'total_price': float(trip.total_price), 'transport_mix': trip.transport_mix, 'origin': {'lat': float(trip.origin_lat), 'lng': float(trip.origin_lng)}, 'destination': {'lat': float(trip.dest_lat), 'lng': float(trip.dest_lng)}, 'assigned_driver_id': trip.driver_id, 'assignment_status': trip.assignment_status, 'created_at': trip.created_at.isoformat() if trip.created_at else None}
 
 
-def trip_history(db: Session, user_id: str) -> dict:
-    trips = db.query(Trip).filter(Trip.user_id == user_id).order_by(Trip.created_at.desc()).all()
-    return {'user_id': user_id, 'items': [{'trip_id': trip.id, 'status': trip.status, 'total_price': float(trip.total_price), 'transport_mix': trip.transport_mix, 'assigned_driver_id': trip.driver_id, 'created_at': trip.created_at.isoformat() if trip.created_at else None} for trip in trips]}
+def trip_history(db: Session, user_id: str, limit: int = 50, offset: int = 0) -> dict:
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    query = db.query(Trip).filter(Trip.user_id == user_id).order_by(Trip.created_at.desc())
+    total = query.count()
+    trips = query.offset(offset).limit(limit).all()
+    return {'user_id': user_id, 'items': [{'trip_id': trip.id, 'status': trip.status, 'total_price': float(trip.total_price), 'transport_mix': trip.transport_mix, 'assigned_driver_id': trip.driver_id, 'created_at': trip.created_at.isoformat() if trip.created_at else None} for trip in trips], 'total': total, 'limit': limit, 'offset': offset}

@@ -29,14 +29,17 @@ ROUTES = [
 ]
 
 
-def search_routes(query: str | None = None, transport_type: str | None = None) -> dict:
+def search_routes(query: str | None = None, transport_type: str | None = None, limit: int = 50, offset: int = 0) -> dict:
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
     items = ROUTES
     if query:
         lowered = query.lower()
         items = [route for route in items if lowered in route['name'].lower() or any(lowered in stop.lower() for stop in route['stops'])]
     if transport_type:
         items = [route for route in items if route['transport_type'] == transport_type]
-    return {'items': items}
+    total = len(items)
+    return {'items': items[offset:offset + limit], 'total': total, 'limit': limit, 'offset': offset}
 
 
 def get_route_stops(route_id: str) -> dict:

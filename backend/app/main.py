@@ -24,6 +24,9 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title=settings.app_name, version='0.1.0', lifespan=lifespan)
 
+# client_ip -> [hits_in_window, window_end_monotonic]
+_RATE_BUCKETS: dict[str, list] = {}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list(),
@@ -37,6 +40,24 @@ app.add_middleware(
 async def operational_controls(request: Request, call_next):
     started = time.perf_counter()
     correlation_id = request.headers.get('X-Request-Id') or uuid.uuid4().hex
+    # Lightweight in-memory rate limit: 300 req/min per client IP.
+    # Health/readiness probes are exempt so orchestrators never get 429.
+    if request.url.path not in ('/health', '/ready', f"{settings.api_v1_prefix}/health"):
+        now = time.monotonic()
+        client = request.client.host if request.client else 'local'
+        bucket = _RATE_BUCKETS.get(client)
+        if bucket is None or now >= bucket[1]:
+            bucket = [[now], now + 60.0]
+            _RATE_BUCKETS[client] = bucket
+        else:
+            bucket[0].append(now)
+        # prune + cap memory
+        cutoff = now - 60.0
+        bucket[0] = [t for t in bucket[0] if t >= cutoff][-320:]
+        if len(_RATE_BUCKETS) > 2000:
+            _RATE_BUCKETS.pop(next(iter(_RATE_BUCKETS)))
+        if len(bucket[0]) > 300:
+            return JSONResponse(status_code=429, content={'detail': 'Rate limit exceeded (300/min)'})
     runtime_metrics.started()
     try:
         response = await call_next(request)
