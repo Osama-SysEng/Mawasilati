@@ -102,3 +102,4 @@ credentials for the underlying third-party services:
 - Live PostgreSQL via Alembic (10 tables) + `.env.example` + `SECURITY.md`
 - 17 tests collected, 0 errors
 - Interactive 3D showcase: open `web-3d/index.html` (Three.js, animated, mouse-reactive)
+- Structured JSON logging + X-Request-ID tracing (see docs/LOGGING.md)
