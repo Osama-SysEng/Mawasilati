@@ -9,8 +9,11 @@ from fastapi.responses import JSONResponse
 
 from app.api.router import api_router, ws_api_router
 from app.core.config import settings
+from app.core.logging_utils import get_logger, log_access, request_id_ctx
 from app.core.metrics import runtime_metrics
 from app.core.database import Base, engine
+
+access_logger = get_logger('app.access')
 
 
 @asynccontextmanager
@@ -39,37 +42,56 @@ app.add_middleware(
 @app.middleware('http')
 async def operational_controls(request: Request, call_next):
     started = time.perf_counter()
-    correlation_id = request.headers.get('X-Request-Id') or uuid.uuid4().hex
-    # Lightweight in-memory rate limit: 300 req/min per client IP.
-    # Health/readiness probes are exempt so orchestrators never get 429.
-    if request.url.path not in ('/health', '/ready', f"{settings.api_v1_prefix}/health"):
-        now = time.monotonic()
-        client = request.client.host if request.client else 'local'
-        bucket = _RATE_BUCKETS.get(client)
-        if bucket is None or now >= bucket[1]:
-            bucket = [[now], now + 60.0]
-            _RATE_BUCKETS[client] = bucket
-        else:
-            bucket[0].append(now)
-        # prune + cap memory
-        cutoff = now - 60.0
-        bucket[0] = [t for t in bucket[0] if t >= cutoff][-320:]
-        if len(_RATE_BUCKETS) > 2000:
-            _RATE_BUCKETS.pop(next(iter(_RATE_BUCKETS)))
-        if len(bucket[0]) > 300:
-            return JSONResponse(status_code=429, content={'detail': 'Rate limit exceeded (300/min)'})
-    runtime_metrics.started()
+    correlation_id = request.headers.get('X-Request-ID') or uuid.uuid4().hex
+    token = request_id_ctx.set(correlation_id)
+
+    def _access(status_code: int) -> None:
+        log_access(
+            access_logger,
+            method=request.method,
+            path=request.url.path,
+            status_code=status_code,
+            duration_ms=(time.perf_counter() - started) * 1000,
+        )
+
     try:
-        response = await call_next(request)
-        response.headers['X-Request-Id'] = correlation_id
-        route = getattr(request.scope.get('route'), 'path', request.url.path)
-        runtime_metrics.record(route, response.status_code, time.perf_counter() - started)
-        return response
-    except Exception:
-        runtime_metrics.record(request.url.path, 500, time.perf_counter() - started)
-        raise
+        # Lightweight in-memory rate limit: 300 req/min per client IP.
+        # Health/readiness probes are exempt so orchestrators never get 429.
+        if request.url.path not in ('/health', '/ready', f"{settings.api_v1_prefix}/health"):
+            now = time.monotonic()
+            client = request.client.host if request.client else 'local'
+            bucket = _RATE_BUCKETS.get(client)
+            if bucket is None or now >= bucket[1]:
+                bucket = [[now], now + 60.0]
+                _RATE_BUCKETS[client] = bucket
+            else:
+                bucket[0].append(now)
+            # prune + cap memory
+            cutoff = now - 60.0
+            bucket[0] = [t for t in bucket[0] if t >= cutoff][-320:]
+            if len(_RATE_BUCKETS) > 2000:
+                _RATE_BUCKETS.pop(next(iter(_RATE_BUCKETS)))
+            if len(bucket[0]) > 300:
+                response = JSONResponse(status_code=429, content={'detail': 'Rate limit exceeded (300/min)'})
+                response.headers['X-Request-ID'] = correlation_id
+                _access(429)
+                return response
+        runtime_metrics.started()
+        try:
+            response = await call_next(request)
+            response.headers['X-Request-ID'] = correlation_id
+            route = getattr(request.scope.get('route'), 'path', request.url.path)
+            runtime_metrics.record(route, response.status_code, time.perf_counter() - started)
+            _access(response.status_code)
+            return response
+        except Exception:
+            runtime_metrics.record(request.url.path, 500, time.perf_counter() - started)
+            _access(500)
+            raise
+        finally:
+            runtime_metrics.completed()
     finally:
-        runtime_metrics.completed()
+        request_id_ctx.reset(token)
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 # Real-time trip tracking: ws(s)://host/ws/trip/{trip_id}?role=driver|passenger
